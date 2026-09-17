@@ -202,13 +202,89 @@ def write_csv(path: str, rows: list[dict]) -> None:
     print(f"\nFull list written to {path} ({len(rows)} products)")
 
 
+def selftest() -> int:
+    """Judgement is tested offline against hand-built products; fetching is not mocked."""
+    checks, failures = 0, []
+
+    def check(label, condition):
+        nonlocal checks
+        checks += 1
+        if not condition:
+            failures.append(label)
+
+    check("domain gets a scheme", normalise_domain("examplestore.com") == "https://examplestore.com")
+    check("domain loses its path", normalise_domain("https://x.com/collections/all") == "https://x.com")
+
+    check("tags are stripped", plain_text("<p>Hello <b>there</b></p>") == "Hello  there")
+    check("entities are decoded", "&" in plain_text("<p>Tea &amp; Coffee</p>"))
+    check("no body is not a crash", plain_text("") == "")
+
+    long_desc = "x" * 200
+    def product(**kw):
+        base = dict(id=1, title="Blue Mug", handle="blue-mug", body_html=long_desc,
+                    product_type="Mugs", images=[{}, {}],
+                    variants=[{"sku": "SKU-1", "available": True}])
+        base.update(kw)
+        return Product(**base)
+
+    counts, rows = audit([product()])
+    check("a healthy product reports nothing", not counts and not rows)
+
+    counts, _ = audit([product(images=[])])
+    check("missing image is caught", counts["no_image"] == 1)
+    counts, _ = audit([product(images=[{}])])
+    check("a lone image is flagged, not counted as missing", counts["single_image"] == 1 and not counts["no_image"])
+
+    counts, _ = audit([product(body_html="")])
+    check("empty description is caught", counts["no_description"] == 1)
+    counts, _ = audit([product(body_html="<p>short</p>")])
+    check("thin description is caught", counts["thin_description"] == 1)
+    counts, _ = audit([product(body_html="<p>" + "y" * 200 + "</p>")])
+    check("markup does not count towards description length", not counts["thin_description"])
+
+    counts, _ = audit([product(variants=[{"sku": "", "available": True}])])
+    check("blank SKU is caught", counts["missing_sku"] == 1)
+
+    counts, _ = audit([product(id=1, handle="a"), product(id=2, handle="b", title="BLUE MUG")])
+    check("duplicate titles ignore case", counts["duplicate_title"] == 2)
+
+    counts, _ = audit([product(title="z" * 71)])
+    check("over-long title is caught", counts["title_too_long"] == 1)
+    counts, _ = audit([product(title="z" * 70)])
+    check("exactly 70 characters is still fine", not counts["title_too_long"])
+
+    counts, _ = audit([product(variants=[{"sku": "S", "available": False}])])
+    check("sold out but published is caught", counts["sold_out_published"] == 1)
+    counts, _ = audit([product(variants=[{"sku": "S", "available": False}, {"sku": "T", "available": True}])])
+    check("one variant in stock is not sold out", not counts["sold_out_published"])
+
+    counts, _ = audit([product(product_type="  ")])
+    check("whitespace product type counts as missing", counts["no_product_type"] == 1)
+
+    _, rows = audit([product(id=1, handle="a", title="Mild", body_html="<p>short</p>"),
+                     product(id=2, handle="b", title="Bad", images=[], body_html="")])
+    check("worst product sorts first", rows[0]["product"] == "Bad")
+    check("severity is summed, not counted", rows[0]["severity"] > rows[1]["severity"])
+
+    print(f"selftest: {checks - len(failures)}/{checks} passed")
+    for failure in failures:
+        print("  FAILED:", failure)
+    return 1 if failures else 0
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Audit a Shopify store's public catalog for revenue-losing gaps.")
-    ap.add_argument("store", help="store domain, e.g. examplestore.com")
+    ap.add_argument("store", nargs="?", help="store domain, e.g. examplestore.com")
     ap.add_argument("--limit", type=int, default=1000, help="max products to scan (default 1000)")
     ap.add_argument("--csv", default=None, help="write the full issue list to this CSV")
     ap.add_argument("--delay", type=float, default=0.5, help="seconds between requests (be polite)")
+    ap.add_argument("--selftest", action="store_true", help="run offline checks and exit")
     args = ap.parse_args()
+
+    if args.selftest:
+        raise SystemExit(selftest())
+    if not args.store:
+        ap.error("give me a store domain, or --selftest")
 
     base = normalise_domain(args.store)
     print(f"Reading public catalog from {base} ...", file=sys.stderr)

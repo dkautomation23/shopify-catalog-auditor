@@ -1,5 +1,7 @@
 # shopify-catalog-auditor
 
+[![CI](https://github.com/dkautomation23/shopify-catalog-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/dkautomation23/shopify-catalog-auditor/actions/workflows/ci.yml)
+
 Audit any Shopify store's catalog for the gaps that quietly cost sales —
 **no API keys, no store access, no app install.** Point it at a domain and get a
 prioritised report plus a CSV fix-list in under a minute.
