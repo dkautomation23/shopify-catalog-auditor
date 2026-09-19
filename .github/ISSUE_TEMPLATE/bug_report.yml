@@ -1,0 +1,48 @@
+name: Bug report
+description: Something behaves differently from what the README says
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste tokens, keys, or any other secret. This tool needs none,
+        but redact anything sensitive from a pasted catalog response anyway.
+
+        Found a security hole instead? Do not use this form — see SECURITY.md.
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.10 or 3.12 (CI's tested versions)"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 / Ubuntu 22.04 / macOS 14"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command
+      description: Include flags, e.g. `python audit.py examplestore.com --csv issues.csv`
+      render: console
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input data
+      description: >-
+        The store domain (if you can share it), or a trimmed sample of the
+        /products.json response that triggers the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
